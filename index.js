@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const { Client, middleware } = require('@line/bot-sdk');
+const { addGroup, getGroups } = require('./database');
 require('dotenv').config();
 
 const config = {
@@ -13,24 +14,45 @@ const app = express();
 app.use(middleware(config));
 app.use(bodyParser.json());
 
-const LINE_GROUP_ID = process.env.LINE_GROUP_ID;
-
 app.post('/webhook', async (req, res) => {
   try {
-    const alertMessage = req.body;
-    const lineMessage = {
-      to: LINE_GROUP_ID,
-      messages: [
-        {
+    const events = req.body.events;
+    for (let event of events) {
+      if (event.type === 'join' || event.type === 'follow') {
+        const groupId = event.source.groupId || event.source.roomId || event.source.userId;
+        addGroup(groupId);
+        await client.replyMessage(event.replyToken, {
           type: 'text',
-          text: `TradingView Alert: ${JSON.stringify(alertMessage)}`
-        }
-      ]
-    };
+          text: `Hello! The group ID is: ${groupId}`
+        });
+      }
+    }
+    res.status(200).send('Event received');
+  } catch (error) {
+    console.error(error);
+    res.status(500).send('Error processing event');
+  }
+});
 
-    await client.pushMessage(lineMessage.to, lineMessage.messages);
+app.post('/alert', async (req, res) => {
+  try {
+    const alertMessage = req.body;
+    getGroups(async (groupIds) => {
+      for (const groupId of groupIds) {
+        const lineMessage = {
+          to: groupId,
+          messages: [
+            {
+              type: 'text',
+              text: `TradingView Alert: ${JSON.stringify(alertMessage)}`
+            }
+          ]
+        };
+        await client.pushMessage(lineMessage.to, lineMessage.messages);
+      }
+    });
 
-    res.status(200).send('Alert received and message sent to group');
+    res.status(200).send('Alert received and message sent to all groups');
   } catch (error) {
     console.error(error);
     res.status(500).send('Error processing alert');
