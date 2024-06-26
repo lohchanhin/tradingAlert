@@ -11,10 +11,9 @@ const config = {
 
 const client = new Client(config);
 const app = express();
-app.use(middleware(config));
-app.use(bodyParser.json());
 
-app.post('/webhook', async (req, res) => {
+// Middleware for /webhook route to verify LINE signature
+app.post('/webhook', middleware(config), async (req, res) => {
   try {
     const events = req.body.events;
     for (let event of events) {
@@ -34,7 +33,8 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-app.post('/alert', async (req, res) => {
+// No middleware for /alert route
+app.post('/alert', bodyParser.json(), async (req, res) => {
   try {
     const alertMessage = req.body;
     getGroups(async (groupIds) => {
